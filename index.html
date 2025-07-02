@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite App</title>
+    <style>
+      /* In your CSS file or <style> block */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden; /* Optional: prevent scrollbars */
+      }
+      canvas {
+        display: block; /* Remove inline gaps */
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <audio
+      id="bg-music"
+      src="assets/The Moon Represents My Heart.mp3"
+      loop
+    ></audio>
+    <div
+      id="play-overlay"
+      style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.85);
+        z-index: 10000;
+      "
+    >
+      <button
+        id="play-btn"
+        style="
+          font-size: 2rem;
+          padding: 1rem 2rem;
+          border: none;
+          border-radius: 1rem;
+          background: #fff;
+          color: #222;
+          cursor: pointer;
+          box-shadow: 0 2px 16px #0008;
+        "
+      >
+        Play Music
+      </button>
+    </div>
+    <div
+      id="audio-controls"
+      style="
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10001;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 0.5rem 1.5rem;
+        border-radius: 1rem;
+        box-shadow: 0 2px 16px #0008;
+      "
+    >
+      <input
+        id="audio-slider"
+        type="range"
+        min="0"
+        max="100"
+        value="0"
+        step="1"
+        style="width: 300px"
+      />
+      <span
+        id="audio-time"
+        style="color: #fff; font-family: monospace; font-size: 1rem"
+        >0:00 / 0:00</span
+      >
+    </div>
+    <script>
+      const audio = document.getElementById("bg-music");
+      const overlay = document.getElementById("play-overlay");
+      const btn = document.getElementById("play-btn");
+      const slider = document.getElementById("audio-slider");
+      const timeLabel = document.getElementById("audio-time");
+      function formatTime(sec) {
+        sec = Math.floor(sec);
+        return `${Math.floor(sec / 60)}:${("0" + (sec % 60)).slice(-2)}`;
+      }
+      function updateSlider() {
+        if (!isNaN(audio.duration)) {
+          slider.max = Math.floor(audio.duration);
+          slider.value = Math.floor(audio.currentTime);
+          timeLabel.textContent = `${formatTime(
+            audio.currentTime
+          )} / ${formatTime(audio.duration)}`;
+        } else {
+          timeLabel.textContent = "0:00 / 0:00";
+        }
+      }
+      audio.addEventListener("timeupdate", updateSlider);
+      audio.addEventListener("loadedmetadata", updateSlider);
+      slider.addEventListener("input", (e) => {
+        audio.currentTime = slider.value;
+      });
+      // Prevent slider from seeking while dragging if not playing
+      slider.addEventListener("mousedown", () => audio.pause());
+      slider.addEventListener("mouseup", () => audio.play());
+      function startMusic() {
+        audio.play();
+        overlay.style.transition = "opacity 0.5s";
+        overlay.style.opacity = 0;
+        setTimeout(() => (overlay.style.display = "none"), 500);
+        window.removeEventListener("click", startMusic);
+        window.removeEventListener("keydown", startMusic);
+      }
+      btn.addEventListener("click", startMusic);
+      window.addEventListener("click", startMusic);
+      window.addEventListener("keydown", startMusic);
+      // Ensure audio auto-replays if it ends
+      audio.addEventListener("ended", () => {
+        audio.currentTime = 0;
+        audio.play();
+      });
+    </script>
+    <script type="module" src="./assets/script.js"></script>
+  </body>
+</html>
