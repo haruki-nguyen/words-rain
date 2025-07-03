@@ -110,15 +110,23 @@ class TextSpriteFactory {
 
     // Clear and setup context
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    // Neon pink glow effect
     ctx.font = `bold ${fontSize}px Segoe UI, Arial, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.shadowColor = "#fff";
-    ctx.shadowBlur = 16;
-    ctx.fillStyle = "#fff";
-    ctx.globalAlpha = 0.9;
 
-    // Draw text
+    // Draw outer pink glow
+    ctx.shadowColor = "#ff3ecf";
+    ctx.shadowBlur = 48;
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = "#ff3ecf";
+    ctx.fillText(message, canvasWidth / 2, canvasHeight / 2);
+
+    // Draw inner white/pink core for neon effect
+    ctx.shadowColor = "#fff0fa";
+    ctx.shadowBlur = 12;
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = "#ffe0fa";
     ctx.fillText(message, canvasWidth / 2, canvasHeight / 2);
 
     // Create texture and material
