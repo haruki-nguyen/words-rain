@@ -546,7 +546,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Easter egg for girlfriend
   setTimeout(() => {
     console.log(
-      "%c💖 Gửi đến người yêu thương nhất của anh,",
+      "%c💖 Gửi đến người anh yêu thương nhất 💖",
       "color: #e255a3; font-size: 2rem; font-weight: bold;"
     );
     console.log(
