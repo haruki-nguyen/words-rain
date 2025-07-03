@@ -95,38 +95,34 @@ class ObjectPool {
 // Text Sprite Factory with caching
 class TextSpriteFactory {
   constructor() {
-    this.cache = new Map();
-    this.canvas = document.createElement("canvas");
-    this.ctx = this.canvas.getContext("2d");
+    // No caching needed since we create unique sprites for each word
   }
 
   createTextSprite(message) {
-    // Check cache first
-    if (this.cache.has(message)) {
-      const cached = this.cache.get(message);
-      return cached.clone();
-    }
+    const { fontSize, canvasWidth, canvasHeight } =
+      this.calculateTextSize(message);
 
-    const { fontSize, canvasWidth } = this.calculateTextSize(message);
-
-    this.canvas.width = canvasWidth;
-    this.canvas.height = CONFIG.BASE_CANVAS_HEIGHT;
+    // Create a new canvas for each sprite to avoid texture sharing
+    const canvas = document.createElement("canvas");
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    const ctx = canvas.getContext("2d");
 
     // Clear and setup context
-    this.ctx.clearRect(0, 0, canvasWidth, CONFIG.BASE_CANVAS_HEIGHT);
-    this.ctx.font = `bold ${fontSize}px Segoe UI, Arial, sans-serif`;
-    this.ctx.textAlign = "center";
-    this.ctx.textBaseline = "middle";
-    this.ctx.shadowColor = "#fff";
-    this.ctx.shadowBlur = 16;
-    this.ctx.fillStyle = "#fff";
-    this.ctx.globalAlpha = 0.9;
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    ctx.font = `bold ${fontSize}px Segoe UI, Arial, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "#fff";
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = "#fff";
+    ctx.globalAlpha = 0.9;
 
     // Draw text
-    this.ctx.fillText(message, canvasWidth / 2, CONFIG.BASE_CANVAS_HEIGHT / 2);
+    ctx.fillText(message, canvasWidth / 2, canvasHeight / 2);
 
     // Create texture and material
-    const texture = new THREE.CanvasTexture(this.canvas);
+    const texture = new THREE.CanvasTexture(canvas);
     const material = new THREE.SpriteMaterial({
       map: texture,
       transparent: true,
@@ -134,35 +130,52 @@ class TextSpriteFactory {
       depthWrite: false,
     });
 
-    // Create sprite with proper scaling (20% smaller)
+    // Create sprite with proper scaling based on actual canvas dimensions
     const scaleX = 12 * 0.65 * (canvasWidth / CONFIG.BASE_CANVAS_WIDTH);
-    const scaleY = 2.8 * 0.65;
+    const scaleY = 2.8 * 0.65 * (canvasHeight / CONFIG.BASE_CANVAS_HEIGHT);
     const sprite = new THREE.Sprite(material);
     sprite.scale.set(scaleX, scaleY, 1);
-
-    // Cache the sprite
-    this.cache.set(message, sprite);
 
     return sprite;
   }
 
   calculateTextSize(message) {
-    let fontSize = CONFIG.BASE_FONT_SIZE;
-    let canvasWidth = CONFIG.BASE_CANVAS_WIDTH;
+    // Create a temporary canvas to measure text
+    const tempCanvas = document.createElement("canvas");
+    const tempCtx = tempCanvas.getContext("2d");
 
+    let fontSize = CONFIG.BASE_FONT_SIZE;
+
+    // Adjust font size based on message length
     if (message.length > CONFIG.MAX_TEXT_LENGTH) {
       fontSize = Math.max(
         CONFIG.MIN_FONT_SIZE,
         CONFIG.BASE_FONT_SIZE -
           (message.length - CONFIG.MAX_TEXT_LENGTH) * CONFIG.FONT_SIZE_REDUCTION
       );
-      canvasWidth =
-        CONFIG.BASE_CANVAS_WIDTH +
-        (message.length - CONFIG.MAX_TEXT_LENGTH) *
-          CONFIG.CANVAS_WIDTH_INCREASE;
     }
 
-    return { fontSize, canvasWidth };
+    // Set font and measure actual text width
+    tempCtx.font = `bold ${fontSize}px Segoe UI, Arial, sans-serif`;
+    const textMetrics = tempCtx.measureText(message);
+    const actualTextWidth = textMetrics.width;
+
+    // Calculate canvas dimensions with proper padding
+    const padding = 80; // Padding on each side
+    const shadowBlur = 16;
+    const totalPadding = padding + shadowBlur * 2;
+
+    const canvasWidth = Math.max(
+      CONFIG.BASE_CANVAS_WIDTH,
+      actualTextWidth + totalPadding
+    );
+
+    const canvasHeight = Math.max(
+      CONFIG.BASE_CANVAS_HEIGHT,
+      fontSize + totalPadding
+    );
+
+    return { fontSize, canvasWidth, canvasHeight };
   }
 
   createHeartSprite() {
