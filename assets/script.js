@@ -92,59 +92,77 @@ class ObjectPool {
   }
 }
 
-// Text Sprite Factory with caching
-class TextSpriteFactory {
+// Text Mesh Factory with canvas texture
+class TextMeshFactory {
   constructor() {
-    // No caching needed since we create unique sprites for each word
+    // No caching needed since we create unique meshes for each word
   }
 
-  createTextSprite(message) {
+  createTextMesh(message) {
     const { fontSize, canvasWidth, canvasHeight } =
       this.calculateTextSize(message);
 
-    // Create a new canvas for each sprite to avoid texture sharing
+    // Create a new canvas for each mesh to avoid texture sharing
     const canvas = document.createElement("canvas");
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
     const ctx = canvas.getContext("2d");
 
-    // Clear and setup context
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-    // Neon pink glow effect
     ctx.font = `bold ${fontSize}px Segoe UI, Arial, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // Draw outer pink glow
+    // Draw multiple glow layers for a stronger neon effect
+    // Outer strong pink glow
+    ctx.save();
     ctx.shadowColor = "#ff3ecf";
-    ctx.shadowBlur = 48;
-    ctx.globalAlpha = 0.85;
+    ctx.shadowBlur = 96;
+    ctx.globalAlpha = 0.7;
     ctx.fillStyle = "#ff3ecf";
     ctx.fillText(message, canvasWidth / 2, canvasHeight / 2);
+    ctx.restore();
 
-    // Draw inner white/pink core for neon effect
+    // Middle white-pink glow
+    ctx.save();
     ctx.shadowColor = "#fff0fa";
-    ctx.shadowBlur = 12;
-    ctx.globalAlpha = 1.0;
+    ctx.shadowBlur = 48;
+    ctx.globalAlpha = 0.9;
     ctx.fillStyle = "#ffe0fa";
     ctx.fillText(message, canvasWidth / 2, canvasHeight / 2);
+    ctx.restore();
+
+    // Inner core
+    ctx.save();
+    ctx.shadowColor = "#fff";
+    ctx.shadowBlur = 16;
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = "#fff";
+    ctx.fillText(message, canvasWidth / 2, canvasHeight / 2);
+    ctx.restore();
 
     // Create texture and material
     const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({
+    texture.needsUpdate = true;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    const material = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
       alphaTest: 0.1,
       depthWrite: false,
+      side: THREE.DoubleSide,
     });
 
-    // Create sprite with proper scaling based on actual canvas dimensions
-    const scaleX = 12 * 0.65 * (canvasWidth / CONFIG.BASE_CANVAS_WIDTH);
-    const scaleY = 2.8 * 0.65 * (canvasHeight / CONFIG.BASE_CANVAS_HEIGHT);
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(scaleX, scaleY, 1);
+    // Plane geometry with aspect ratio matching the canvas
+    const aspect = canvasWidth / canvasHeight;
+    const height = 2.8 * 0.65 * (canvasHeight / CONFIG.BASE_CANVAS_HEIGHT);
+    const width = height * aspect;
+    const geometry = new THREE.PlaneGeometry(width, height);
+    const mesh = new THREE.Mesh(geometry, material);
 
-    return sprite;
+    return mesh;
   }
 
   calculateTextSize(message) {
@@ -186,7 +204,7 @@ class TextSpriteFactory {
     return { fontSize, canvasWidth, canvasHeight };
   }
 
-  createHeartSprite() {
+  createHeartMesh() {
     const canvas = document.createElement("canvas");
     canvas.width = 512;
     canvas.height = 512;
@@ -201,17 +219,24 @@ class TextSpriteFactory {
     ctx.fillText("❤️", canvas.width / 2, canvas.height / 2);
 
     const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({
+    texture.needsUpdate = true;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    const material = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
       alphaTest: 0.1,
       depthWrite: false,
+      side: THREE.DoubleSide,
     });
 
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(6.4, 6.4, 1);
+    // Plane geometry for heart
+    const size = 6.4;
+    const geometry = new THREE.PlaneGeometry(size, size);
+    const mesh = new THREE.Mesh(geometry, material);
 
-    return sprite;
+    return mesh;
   }
 }
 
@@ -226,11 +251,13 @@ class WordsRainApp {
     this.rainWords = [];
     this.sparkles = [];
 
-    this.textFactory = new TextSpriteFactory();
+    this.textFactory = new TextMeshFactory();
     this.audioController = new AudioController();
 
     this.animationId = null;
     this.isRunning = false;
+
+    this.initialLookDirection = null;
 
     this.init();
   }
@@ -264,6 +291,10 @@ class WordsRainApp {
     this.camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
     this.camera.position.set(0, 0, 18);
     this.camera.lookAt(0, 0, 0);
+
+    // Store the initial look direction (unit vector)
+    this.initialLookDirection = new THREE.Vector3();
+    this.camera.getWorldDirection(this.initialLookDirection);
   }
 
   setupRenderer() {
@@ -339,19 +370,22 @@ class WordsRainApp {
   }
 
   spawnRainWordOrHeart() {
-    const sprite =
+    const mesh =
       Math.random() < CONFIG.HEART_CHANCE
-        ? this.textFactory.createHeartSprite()
-        : this.textFactory.createTextSprite(
+        ? this.textFactory.createHeartMesh()
+        : this.textFactory.createTextMesh(
             WORDS[Math.floor(Math.random() * WORDS.length)]
           );
 
     const pos = this.randomPosition();
-    sprite.position.set(pos.x, pos.y, pos.z);
-    sprite.userData = { speed: this.randomSpeed() };
+    mesh.position.set(pos.x, pos.y, pos.z);
+    mesh.userData = { speed: this.randomSpeed() };
+    // Orient the mesh to face the initial look direction
+    mesh.lookAt(mesh.position.clone().add(this.initialLookDirection));
+    mesh.rotateY(Math.PI); // Flip to correct reversed text
 
-    this.scene.add(sprite);
-    this.rainWords.push(sprite);
+    this.scene.add(mesh);
+    this.rainWords.push(mesh);
   }
 
   spawnSparkles() {
@@ -380,7 +414,7 @@ class WordsRainApp {
 
     // Add glow effect
     const glowTexture = this.createGlowTexture();
-    const spriteMaterial = new THREE.SpriteMaterial({
+    const spriteMaterial = new THREE.MeshBasicMaterial({
       map: glowTexture,
       color: 0xffffff,
       transparent: true,
@@ -389,7 +423,7 @@ class WordsRainApp {
       depthTest: false,
     });
 
-    const sprite = new THREE.Sprite(spriteMaterial);
+    const sprite = new THREE.Mesh(geometry, spriteMaterial);
     sprite.scale.set(1.2, 1.2, 1.2);
     mesh.add(sprite);
 
@@ -444,29 +478,32 @@ class WordsRainApp {
 
   updateRainWords() {
     for (let i = 0; i < this.rainWords.length; i++) {
-      const sprite = this.rainWords[i];
-      sprite.position.y -= sprite.userData.speed * CONFIG.FALL_SPEED;
+      const mesh = this.rainWords[i];
+      mesh.position.y -= mesh.userData.speed * CONFIG.FALL_SPEED;
 
-      if (sprite.position.y < CONFIG.WORLD_BOUNDS.FLOOR) {
+      if (mesh.position.y < CONFIG.WORLD_BOUNDS.FLOOR) {
         // Reset position
         const pos = this.randomPosition();
-        sprite.position.set(pos.x, pos.y, pos.z);
+        mesh.position.set(pos.x, pos.y, pos.z);
 
         // Replace with new content
-        this.scene.remove(sprite);
+        this.scene.remove(mesh);
 
-        const newSprite =
+        const newMesh =
           Math.random() < CONFIG.HEART_CHANCE
-            ? this.textFactory.createHeartSprite()
-            : this.textFactory.createTextSprite(
+            ? this.textFactory.createHeartMesh()
+            : this.textFactory.createTextMesh(
                 WORDS[Math.floor(Math.random() * WORDS.length)]
               );
 
-        newSprite.position.copy(sprite.position);
-        newSprite.userData = { speed: this.randomSpeed() };
+        newMesh.position.copy(mesh.position);
+        newMesh.userData = { speed: this.randomSpeed() };
+        // Orient the new mesh to face the initial look direction
+        newMesh.lookAt(newMesh.position.clone().add(this.initialLookDirection));
+        newMesh.rotateY(Math.PI); // Flip to correct reversed text
 
-        this.scene.add(newSprite);
-        this.rainWords[i] = newSprite;
+        this.scene.add(newMesh);
+        this.rainWords[i] = newMesh;
       }
     }
   }
